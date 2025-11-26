@@ -41,7 +41,8 @@ export const GEOSERVER_WFS = {
 // krpano 관련 기본 폴더 등
 export const KRPANO = {
   ROOT: "/vtour",                         // krpano 루크 폴더
-  TOUR: "/tour.html?startscene=scene_",   // krpano 뷰어
+  TOUR: "/tour.xml",    // krpano 뷰어
   TUMB: ".tiles/thumb.jpg",               // krpano 미리보기 위치
   DEFDATE: "20250903",                    // krpano 최신 사진 폴더명
+  SCENE_PREFIX: "scene_",
 }

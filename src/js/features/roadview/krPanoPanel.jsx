@@ -1,11 +1,61 @@
 import { useEffect, useRef, useState } from "react";
 
+// 현재 로드된 krpano viewer js 경로를 전역에 기록하기 위한 키
+const KR_VIEWER_KEY = "__krpanoViewerUrl";
+
+// 날짜별 krpano viewer js를 동적으로 로딩
+function loadKrpanoViewer(viewerJsUrl) {
+  return new Promise((resolve, reject) => {
+    // 이미 같은 js 로딩되어 있고, embedpano 도 있으면 그대로 사용
+    if (window.embedpano && window[KR_VIEWER_KEY] === viewerJsUrl) {
+      resolve();
+      return;
+    }
+
+    // 기존 viewer 스크립트(tag) 제거
+    const oldScript = document.querySelector(
+      'script[data-krpano-viewer="true"]'
+    );
+    if (oldScript) {
+      oldScript.remove();
+    }
+
+    const script = document.createElement("script");
+    script.src = viewerJsUrl;
+    script.async = true;
+    script.dataset.krpanoViewer = "true";
+
+    script.onload = () => {
+      window[KR_VIEWER_KEY] = viewerJsUrl;
+      if (typeof window.embedpano !== "function") {
+        reject(
+          new Error(
+            `[KrpanoPanel] ${viewerJsUrl} 로드 후에도 window.embedpano 없음`
+          )
+        );
+      } else {
+        resolve();
+      }
+    };
+
+    script.onerror = () => {
+      reject(new Error(`[KrpanoPanel] krpano viewer 로드 실패: ${viewerJsUrl}`));
+    };
+
+    document.body.appendChild(script);
+  });
+}
+
 /**
- * vtour은 public/vtour 아래에 둔다. src는 tour.html로 둔다.
- * 크기는 px 고정(widthPx/heightPx). 마우스로 헤더를 끌어 이동.
+ * vtour은 public/vtour/{날짜} 아래에 두는 구조.
+ * - viewerJsUrl: "/vtour/20250903/tour.js"
+ * - src(xml):    "/vtour/20250903/tour.xml"
+ * - startSceneId: "scene_PIC_20250903_"
  */
 export default function KrpanoPanel({
-  src = "/vtour/tour.html",
+  viewerJsUrl,
+  src = "/vtour/tour.xml",
+  startSceneId,
   widthPx = 720,
   heightPx = 405,
   defaultMargin = 12,
@@ -17,7 +67,17 @@ export default function KrpanoPanel({
   title = "Panorama",
 }) {
   const headerRef = useRef(null);
-  const iframeRef = useRef(null);
+  const panoContainerRef = useRef(null);
+
+  // embedpano로 생성된 krpano 인터페이스 객체
+  const krpanoRef = useRef(null);
+  const panoIdRef = useRef(
+    `krpano-viewer-${Math.random().toString(36).slice(2)}`
+  );
+
+  // 이벤트 리스너 참조(정리용)
+  const sceneListenerRef = useRef(null);
+  const viewListenerRef = useRef(null);
 
   // 패널 위치
   const [pos, setPos] = useState({ x: -9999, y: -9999 });
@@ -26,7 +86,7 @@ export default function KrpanoPanel({
   // 전체 화면 여부
   const [isMaximized, setIsMaximized] = useState(false);
 
-  // 최초 위치 배치 + 리사이즈 대응
+  // 패널 위치 잡기
   useEffect(() => {
     const place = () => {
       const W = window.innerWidth;
@@ -148,46 +208,120 @@ export default function KrpanoPanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isMaximized]);
 
-  // krpano에서 보내는 data 수신 (scene)
+  // 1) viewer js 로딩
+  // 2) embedpano 호출
+  // 3) krpano.events로 scene/view 변화 감시
   useEffect(() => {
-    const onMsg = (e) => {
-      if (!iframeRef.current) return;
-      if (e.source !== iframeRef.current.contentWindow) return;
+    const container = panoContainerRef.current;
+    if (!container) return;
 
-      const data = e.data;
+    const panoId = panoIdRef.current;
+    container.id = panoId;
+    container.innerHTML = "";
 
-      if (data && data.type === "krpano-scene" && data.name) {
-        onSceneChange?.({
-          sceneName: data.name,
-          heading: data.heading,
+    let cancelled = false;
+
+    loadKrpanoViewer(viewerJsUrl)
+      .then(() => {
+        if (cancelled) return;
+        if (typeof window.embedpano !== "function") {
+          console.error("[KrpanoPanel] embedpano 없음");
+          return;
+        }
+
+        function onready(krpano) {
+          krpanoRef.current = krpano;
+
+          const sceneListener = () => {
+            if (!krpanoRef.current) return;
+
+            const baseName = krpanoRef.current.get("scene[get(xml.scene)].title");
+
+            const heading = krpanoRef.current.get("scene[get(xml.scene)].heading");
+
+            if (typeof onSceneChange === "function") {
+              onSceneChange({
+                sceneName: baseName,
+                heading: Number(heading) || 0,
+              });
+            }
+          };
+
+          const viewListener = () => {
+            if (!krpanoRef.current) return;
+            if (typeof viewChange !== "function") return;
+
+            const h = Number(krpanoRef.current.get("view.hlookat")) || 0;
+            const v = Number(krpanoRef.current.get("view.vlookat")) || 0;
+            const fov = Number(krpanoRef.current.get("view.fov")) || 0;
+
+            viewChange({ hlookat: h, vlookat: v, fov });
+          };
+
+          sceneListenerRef.current = sceneListener;
+          viewListenerRef.current = viewListener;
+
+          krpano.events.addListener("onnewpano", sceneListener);
+          krpano.events.addListener("onviewchanged", viewListener);
+
+          // 이미 scene 이 있으면 초기 상태 한 번 밀어줌
+          sceneListener();
+          viewListener();
+        }
+
+        const vars = startSceneId ? { startscene: startSceneId } : undefined;
+
+        window.embedpano({
+          target: panoId,
+          xml: src,
+          vars,
+          onready,
         });
+      })
+      .catch((err) => {
+        console.error(String(err));
+      });
+
+    return () => {
+      cancelled = true;
+      const krpano = krpanoRef.current;
+
+      if (krpano) {
+        if (sceneListenerRef.current) {
+          try {
+            krpano.events.removeListener(
+              "onnewpano",
+              sceneListenerRef.current
+            );
+          } catch (err) {
+            console.warn("[KrpanoPanel] onnewpano remove 실패", err);
+          }
+        }
+        if (viewListenerRef.current) {
+          try {
+            krpano.events.removeListener(
+              "onviewchanged",
+              viewListenerRef.current
+            );
+          } catch (err) {
+            console.warn("[KrpanoPanel] onviewchanged remove 실패", err);
+          }
+        }
       }
-    };
 
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, [onSceneChange]);
-
-  // krpano에서 보내는 data 수신 (view)
-  useEffect(() => {
-    const onMsg = (e) => {
-      if (!iframeRef.current) return;
-      if (e.source !== iframeRef.current.contentWindow) return;
-
-      const data = e.data;
-
-      if (data && data.type === "view-info") {
-        viewChange?.({
-          hlookat: data.hlookat,
-          vlookat: data.vlookat,
-          fov: data.fov,
-        });
+      if (typeof window.removepano === "function") {
+        try {
+          window.removepano(panoId);
+        } catch (err) {
+          console.warn("[KrpanoPanel] removepano 실패:", err);
+        }
       }
-    };
 
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, [viewChange]);
+      krpanoRef.current = null;
+      sceneListenerRef.current = null;
+      viewListenerRef.current = null;
+    };
+  }, [viewerJsUrl, src, startSceneId]);
 
   const panelWidth = isMaximized ? "100vw" : `${widthPx}px`;
   const panelHeight = isMaximized ? "100vh" : `${heightPx}px`;
@@ -263,9 +397,9 @@ export default function KrpanoPanel({
         </div>
       </div>
 
-      <iframe
-        ref={iframeRef}
-        src={src}
+      {/* embedpano 컨테이너 */}
+      <div
+        ref={panoContainerRef}
         style={{ flex: 1, border: "none", background: "#000" }}
       />
     </div>

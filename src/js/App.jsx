@@ -12,8 +12,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);    // 로드뷰 on/off 버튼 load
   const [roadOn, setRoadOn] = useState(false);      // 로드뷰 on/off 상태
   const [showPano, setShowPano] = useState(false);  // krpano on/off 상태
-  const [startScene, setStartScene] = useState(null);   // krpano 연결 url scene 정보
-  const [activeScene, setActiveScene] = useState(null); // krpano 현재 확인 중인 scene 정보
+  const [startScene, setStartScene] = useState(null);   // ph_nm (PIC_...) 기준 scene명
+  const [activeScene, setActiveScene] = useState(null); // krpano 현재 확인 중인 scene(ph_nm)
   const [nearPhotos, setNearPhotos] = useState([]);     // krpano, 클릭 기준 주변 사진 정보
   const [shootingDate, setShootingDate] = useState(KRPANO.DEFDATE); // krpano 촬영 날짜 선택
   const dateRef = useRef(shootingDate);
@@ -98,8 +98,8 @@ export default function App() {
 
   // 미리보기 클릭
   function handleThumbClick(ph_nm) {
-    setStartScene(ph_nm);
-    setActiveScene(ph_nm);
+    setStartScene(ph_nm);   // ph_nm (PIC_...) 저장
+    setActiveScene(ph_nm);  // 썸네일 하이라이트용
     setShowPano(true);
     if (viewerRef.current) {
       highlightRoadPointByName(viewerRef.current, ph_nm);
@@ -125,12 +125,9 @@ export default function App() {
       return;
     }
 
-    console.log("[SCENE] center from entity:", center.lon, center.lat, center.h, "[HEADING]:", sceneInfo.heading );
-
-    setActiveScene(sceneInfo.sceneName);
-
-    setSceneView(sceneInfo.heading);
-    refreshPreviewByCenter(center);
+    setActiveScene(sceneInfo.sceneName);   // 미리보기 하이라이트 동기화
+    setSceneView(sceneInfo.heading);      // frustum / 방향 동기화
+    refreshPreviewByCenter(center);       // 미리보기 위치 이동
   }
 
   // 실시간 hlookat, vlookat, fov 변화 핸들링
@@ -151,6 +148,10 @@ export default function App() {
     setStartScene(null);
     setActiveScene(null);
   }, [shootingDate]);
+
+  // embedpano에 넘길 startscene id (scene_ 접두어 포함)
+  const startSceneId =
+    startScene != null ? `${KRPANO.SCENE_PREFIX}${startScene}` : null;
 
   return (
     <>
@@ -198,7 +199,9 @@ export default function App() {
 
       {showPano && startScene && activeScene && (
         <KrpanoPanel
-          src={`${KRPANO.ROOT}/${shootingDate}${KRPANO.TOUR}${startScene}`}
+          viewerJsUrl={`${KRPANO.ROOT}/${shootingDate}/tour.js`}  // tour.js
+          src={`${KRPANO.ROOT}/${shootingDate}${KRPANO.TOUR}`}    // tour.xml
+          startSceneId={startSceneId}                             // vars.startscene
           widthPx={600}
           heightPx={400}
           initial="top-right"

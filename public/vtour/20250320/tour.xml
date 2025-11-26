@@ -90,31 +90,12 @@
 		set(hotspot[nadir_logo].zorder, 1);
 		);
 	</action>
-	
-	<!-- 현재 scene에서의 카메라 view.hlookat -->
-	<action name="notify_parent_view">
-		<!-- throttling이 필요한 경우 -->
-		<!-- ifnot(view_lock,
-			set(view_lock, true);
-
-			jscall( calc('_notifyParentViewChanged(' + get(view.hlookat) + ', ' + get(view.vlookat) + ', ' + get(view.fov) + ');') );
-
-			delayedcall(0.1, set(view_lock, false););	
-		); -->
-		jscall( calc('_notifyParentViewChanged(' + get(view.hlookat) + ', ' + get(view.vlookat) + ', ' + get(view.fov) + ');') );
-	</action>
-
-	<!-- 현재 보고 있는 scene title 및 초기 view 값 전달 -->
-	<action name="notify_parent_scene">
-		jscall( calc('_notifyParentSceneChanged("' + get(scene[get(xml.scene)].title) + '", ' + get(scene[get(xml.scene)].heading) + ')') );
-	</action>
 
 	<!-- 이벤트 -->
     <events 
+		name="app_events"
 		onnewpano="add_nadir_logo();"
-		onloadcomplete="notify_parent_scene(); notify_parent_view();" 
-		onviewchanged="notify_parent_view();"
-	 />
+	/>
 
 	<scene name="scene_PIC_20250320_094655" title="PIC_20250320_094655" onstart="" thumburl="panos/PIC_20250320_094655.tiles/thumb.jpg" lat="" lng="" heading="315">
 		

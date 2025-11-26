@@ -16,36 +16,6 @@
 
 <script src="tour.js"></script>
 
-<script>
-  // krpano -> React로 scene 이름 및 초기 view 값을 보내는 브리지
-  function _notifyParentSceneChanged(sceneName, heading) {
-    try {
-      if (parent && parent !== window && parent.postMessage) {
-        parent.postMessage(
-          { type: "krpano-scene", name: sceneName, heading: heading },
-          "*"
-        );
-      }
-    } catch (e) {
-      console.log("[krpano iframe] postMessage failed", e);
-    }
-  }
-
-  // krpano -> React로 현재 view 변화값을 전달하는 브리지
-  function _notifyParentViewChanged(hlookat, vlookat, fov) {
-	try {
-      if (parent && parent !== window && parent.postMessage) {
-        parent.postMessage(
-          { type: "view-info", hlookat: hlookat, vlookat: vlookat, fov: fov },
-          "*"
-        );
-      }
-    } catch (e) {
-      console.log("[krpano iframe] postMessage failed", e);
-    }
-  }
-</script>
-
 <div style="width:100%;height:100%;">
 	<noscript><table style="width:100%;height:100%;"><tr style="vertical-align:middle;text-align:center;"><td>ERROR:<br><br>Javascript not activated<br><br></td></tr></table></noscript>
 	<script>
