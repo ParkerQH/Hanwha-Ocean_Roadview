@@ -1,51 +1,5 @@
 import * as Cesium from "cesium";
 
-// 중심(lon,lat) 기준 반경(m) -> 경위도 BBOX(deg)
-export function bboxFromCenterMeters(lon, lat, radiusMeters) {
-  const latRad = Cesium.Math.toRadians(lat);
-  const dLat = radiusMeters / 110574.0;
-  const dLon = radiusMeters / (111320.0 * Math.cos(latRad));
-
-  return {
-    minLon: lon - dLon,
-    minLat: lat - dLat,
-    maxLon: lon + dLon,
-    maxLat: lat + dLat,
-  };
-}
-
-// CQL BBOX 문자열 생성
-export function cqlBBOX({ geom = "geom" }, bbox) {
-  const { minLon, minLat, maxLon, maxLat } = bbox;
-  return `BBOX(${geom},${minLon},${minLat},${maxLon},${maxLat})`;
-}
-
-// BBOX로 포인트만 조회
-export async function fetchPointsInBBox(
-  { wfsBase, typeName, srsName = "EPSG:4326", geom = "geom", extraCql = "" },
-  bbox
-) {
-  const params = new URLSearchParams({
-    service: "WFS",
-    version: "2.0.0",
-    request: "GetFeature",
-    typeNames: typeName,
-    outputFormat: "application/json",
-    srsName,
-  });
-  const cql = cqlBBOX({ geom }, bbox) + (extraCql ? ` AND (${extraCql})` : "");
-  params.set("CQL_FILTER", cql);
-
-  const url = `${wfsBase}?${params.toString()}`;
-  const res = await fetch(url);
-
-  if (!res.ok)
-    throw new Error(`WFS BBOX failed: ${res.status} ${res.statusText}`);
-
-  const fc = await res.json();
-  return Array.isArray(fc?.features) ? fc.features : [];
-}
-
 export function lonLatFromPosition(
   position,
   time = Cesium.JulianDate.now()
@@ -139,32 +93,4 @@ export function roadPointsWithinMetersLocal(viewer, lon, lat, radiusMeters = 5, 
 
   if (!ds) return [];
   return pointsWithinMetersInDataSource(ds, lon, lat, radiusMeters, time);
-}
-
-// 선택 반경(ellipse) 한 개 유지
-let _selectionCircle = null;
-export function upsertSelectionCircle(viewer, lon, lat, radiusMeters, { outlineWidth = 2 } = {}) {
-  if (!viewer) return null;
-  const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
-  if (!_selectionCircle) {
-    _selectionCircle = viewer.entities.add({
-      name: "selection-circle",
-      position: pos,
-      ellipse: {
-        semiMajorAxis: radiusMeters,
-        semiMinorAxis: radiusMeters,
-        height: 0,
-        material: Cesium.Color.fromBytes(0, 153, 255, 40),
-        outline: true,
-        outlineColor: Cesium.Color.fromBytes(0, 153, 255, 255),
-        outlineWidth,
-      },
-      zIndex: 9999,
-    });
-  } else {
-    _selectionCircle.position = pos;
-    _selectionCircle.ellipse.semiMajorAxis = radiusMeters;
-    _selectionCircle.ellipse.semiMinorAxis = radiusMeters;
-  }
-  return _selectionCircle;
 }

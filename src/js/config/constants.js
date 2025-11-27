@@ -15,7 +15,8 @@ export const FRUSTUMDEF = {
   VIEW_POINT_RADIUS: 0.7, // viewpoint sphere 반지름 길이
   RATIO: 4.0 / 3.0,       // krpano 화면 비율 등. frustum 가로:세로 비율
   KRPANO_MAXFOV: 140,     // 사용할 krpano의 최대 fov
-  FRUSTUM_MAXFOV: 120     // 제공할 frustum의 최대 fov
+  FRUSTUM_MAXFOV: 120,     // 제공할 frustum의 최대 fov
+  ENTITY_DELAY: 300      // frustum 생성 딜레이 시간 (ms)
 }
 
 /** 
@@ -43,6 +44,7 @@ export const KRPANO = {
   ROOT: "/vtour",                         // krpano 루크 폴더
   TOUR: "/tour.xml",    // krpano 뷰어
   TUMB: ".tiles/thumb.jpg",               // krpano 미리보기 위치
+  DATE_CHOICES: [ "20250903", "20250320" ], // krpano 촬영 날짜 리스트(폴더명 기준)
   DEFDATE: "20250903",                    // krpano 최신 사진 폴더명
   SCENE_PREFIX: "scene_",
 }

@@ -18,7 +18,11 @@ export default function App() {
   const [shootingDate, setShootingDate] = useState(KRPANO.DEFDATE); // krpano 촬영 날짜 선택
   const dateRef = useRef(shootingDate);
 
-  const DATE_CHOICES = ["20250903", "20250320"];
+  // 사용 가능한 날짜 목록 (DEFDATE 먼저)
+  const ALL_DATE_CHOICES = [
+    KRPANO.DEFDATE,
+    ...KRPANO.DATE_CHOICES.filter((d) => d !== KRPANO.DEFDATE),
+  ];
 
   // 로드뷰 ON
   async function handleLoad() {
@@ -135,7 +139,7 @@ export default function App() {
     setViewHeadingDeg(value.hlookat, value.vlookat, value.fov);
   }
 
-  // 날짜가 바뀌면 현재 미리보기 URL도 즉시 재계산
+  // 날짜가 바뀌면 현재 미리보기 URL도 즉시 재계산 + krpano 초기화
   useEffect(() => {
     setNearPhotos((prev) =>
       prev.map((it) => ({
@@ -147,6 +151,7 @@ export default function App() {
     setShowPano(false);
     setStartScene(null);
     setActiveScene(null);
+    clearRoadHighlight();
   }, [shootingDate]);
 
   // embedpano에 넘길 startscene id (scene_ 접두어 포함)
@@ -160,6 +165,7 @@ export default function App() {
         onClickCenter={handleClickCenter}
       />
 
+      {/* 상단: 로드뷰 토글만 유지, 날짜 선택은 캐러셀로 이동 */}
       <div
         style={{
           position: "fixed",
@@ -175,26 +181,9 @@ export default function App() {
           backdropFilter: "blur(4px)",
         }}
       >
-        {/* 로드 뷰 토글(로드/제거 통합) */}
         <button type="button" onClick={toggleRoad} disabled={loading}>
           {roadOn ? "로드 뷰 제거" : loading ? "로딩 중…" : "로드 뷰 불러오기"}
         </button>
-
-        {/* 토글 ON일 때만 날짜 드롭다운 노출 */}
-        {roadOn && (
-          <select
-            value={shootingDate}
-            onChange={(e) => setShootingDate(e.target.value)}
-            style={{ height: 30 }}
-          >
-            {/* DEFDATE 우선 선택 보장 */}
-            {[KRPANO.DEFDATE, ...DATE_CHOICES.filter(d => d !== KRPANO.DEFDATE)].map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
 
       {showPano && startScene && activeScene && (
@@ -209,17 +198,21 @@ export default function App() {
             setShowPano(false);
             setStartScene(null);
             setActiveScene(null);
+            clearRoadHighlight();
           }}
           viewChange={handleViewChange}
           onSceneChange={handleSceneChange}
         />
       )}
 
+      {/* 주변 포인트가 있을 때만 캐러셀 바 노출 */}
       {nearPhotos.length > 0 && (
         <MultipleItems
           images={nearPhotos}
           date={shootingDate}
+          dateChoices={ALL_DATE_CHOICES}
           activeName={activeScene}
+          onChangeDate={setShootingDate}
           onImageClick={handleThumbClick}
         />
       )}
