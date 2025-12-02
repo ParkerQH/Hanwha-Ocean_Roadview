@@ -8,11 +8,11 @@ let roadWmsLayer = null;
 let pointDS = null;
 
 export async function loadRoad(
-  viewer,
+  viewer, layer,
   {
     // road 라인 wms
     wmsUrl = GEOSERVER_WMS.URL,
-    wmsLayers = GEOSERVER_WMS.LAYER,
+    wmsLayers = layer,
     wmsParams = {
       service: "WMS",
       version: "1.1.1",

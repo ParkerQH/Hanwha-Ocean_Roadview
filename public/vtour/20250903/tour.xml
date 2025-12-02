@@ -1,6 +1,6 @@
 ﻿<krpano version="1.23" title="Virtual Tour">
 
-	<include url="skin/vtourskin.xml" />
+	<include url="../skin/vtourskin.xml" />
 
 	<!-- customize skin settings: maps, gyro, webvr, thumbnails, tooltips, layout, design, ... -->
 	<skin_settings maps="false"
@@ -81,7 +81,7 @@
 	<action name="add_nadir_logo">
 		if(!hotspot[nadir_logo],
 		addhotspot(nadir_logo);
-		set(hotspot[nadir_logo].url, 'skin/viewer_logo_1.png'); <!-- 로고 이미지 경로 -->
+		set(hotspot[nadir_logo].url, '%VIEWER%/skin/viewer_logo_1.png'); <!-- 로고 이미지 경로 -->
 		set(hotspot[nadir_logo].ath, 0);
 		set(hotspot[nadir_logo].atv, 90);
 		set(hotspot[nadir_logo].distorted, true);
@@ -92,7 +92,6 @@
 
 	<!-- 이벤트 -->
     <events 
-		name="app_events"
 		onnewpano="add_nadir_logo();"
 	/>
 

@@ -10,17 +10,7 @@ import { readProperty } from "./entityUtil";
  * 2) React -> Cesium
  *    썸네일/scene 클릭 시: highlightRoadPointByName(viewer, photoName)
  *      - road-points DataSource에서 해당 포인트를 찾고
- *      - 포인트 자체는 숨기고, 위에 구(sphere)만 올림
- *      - frustum은 바로 만들지 않고, 내부 상태만 세팅
- *
- * 3) frustum 생성 타이밍 제어
- *    krpano에서 view 값이 한 번이라도 들어와야 함 (_viewReady)
- *    highlight 시작 후 200~300ms(ENTITY_DELAY)가 지나야 한다 (_entityVisible)
- *    위 두 조건을 모두 만족하는 시점에만 spawnFrustumNow()로 frustum을 최초 1회 생성
- *
- * 4) 결론
- *    krpano 기본 view(0,0,90)로 그려지는 초기 프레임은 아예 화면 표시 X
- *    최종 view 값이 세팅된 뒤, 200~300ms 정도 지난 다음에 원하는 방향으로만 frustum이 한 번에 나타남
+ *      - 포인트 자체는 숨기고, 위에 구(sphere)와 frustum 생성
  */
 
 // krpano에서 넘어오는 카메라 시야 값(전역 상태)
@@ -29,22 +19,12 @@ let _viewHlookat = null;
 let _viewVlookat = null;
 let _viewFov = null;
 
-// krpano에서 실제 view 값이 최소 한 번 이상 들어왔는지 여부
-//    false: 아직 기본값일 수도 있는 상태(0,0,90 등), frustum 계산/표시 금지
-//    true : computeFrustumPoints에서 view 값을 신뢰해도 되는 상태
-let _viewReady = false;
-
 // 현재 하이라이트 상태를 구성하는 엔티티 핸들들
 let _highlightPoint = null;       // 좌표 포인트 지도상 표시 X
 let _highlightFrustumSides = [];  // krpano 바탕 frustum
 let _highlightViewer = null;      // cesium viewer 인스턴스
 let _highlightSphere = null;      // krpano 카메라 위치 표현 구 (frustum의 꼭짓점)
 
-// 엔티티 표시 지연용 플래그
-//    setTimeout(ENTITY_DELAY) 이후 true
-//    - frustum/구가 화면에 나타나도 되는지 여부
-//    - krpano view 자체는 그 사이에도 계속 업데이트되지만, 화면에만 안 보이게 막는 용도
-let _entityVisible = true;
 
 // frustum 생성 여부
 //    false: 아직 프러스텀 polygon 엔티티(옆면 4개)가 생성되지 않은 상태
@@ -55,7 +35,6 @@ let _frustumCreated = false;
 // 초기 krpano scene heading 세팅
 export function setSceneView(heading) {
   _sceneHeading = Number(heading);
-  _viewReady = false;   // 새 scene 들어오면 view 준비 상태 초기화
 }
 
 // krpano에서 view(h/v/fov)가 바뀔 때마다 App.jsx에서 호출
@@ -70,12 +49,6 @@ export function setViewHeadingDeg(hlookat, vlookat, fov) {
   if (Number.isFinite(fov)) {
     _viewFov = fov;
   }
-
-  // 한 번이라도 유효한 view 값이 들어왔다는 플래그
-  _viewReady = true;
-
-  // 이 시점에 frustum 생성 조건이 만족된다면, 여기서 최초 생성 시도
-  trySpawnFrustum();
 }
 
 /**
@@ -96,12 +69,9 @@ export function setViewHeadingDeg(hlookat, vlookat, fov) {
  *    nearRadius: apex->near 평면 중심까지 거리,
  *    farRadius:  apex->far 평면 중심까지 거리
  *  }
- *
- * _viewReady가 false인 경우(krpano view 값이 아직 준비되지 않은 경우), 계산을 아예 하지 않고 null을 반환
  */
 function computeFrustumPoints(target, time, radiusMeters, cameraHeight) {
   if (!target || !target.position) return null;
-  if (!_viewReady) return null;  // view 준비 전에는 계산하지 않음
 
   // target.position는 SampledPositionProperty일 수 있으므로 time 기준으로 값을 뽑음
   const basePos =
@@ -254,16 +224,6 @@ function computeFrustumPoints(target, time, radiusMeters, cameraHeight) {
   };
 }
 
-// frustum을 만들 수 있는지 판단
-function trySpawnFrustum() {
-  if (_frustumCreated) return;
-  if (!_highlightViewer || !_highlightPoint) return;
-  if (!_viewReady) return;
-  if (!_entityVisible) return;
-
-  spawnFrustumNow();
-}
-
 // 프러스텀 옆면 polygon 4개를 생성하는 함수
 function spawnFrustumNow() {
   if (_frustumCreated) return;
@@ -299,7 +259,7 @@ function spawnFrustumNow() {
       return new Cesium.PolygonHierarchy(positions);
     }, false);
   }
-
+  
   const sideColor = Cesium.Color.fromCssColorString("#3cb6c6").withAlpha(0.8);
 
   for (let side = 0; side < 4; side++) {
@@ -309,12 +269,6 @@ function spawnFrustumNow() {
         hierarchy: makeSideHierarchyCallback(side),
         material: sideColor,
         perPositionHeight: true,
-        // show 조건:
-        //    entityVisible: highlight 이후 0.5초 지연이 끝났는지
-        //    viewReady    : krpano view 값이 최소 한 번 이상 들어왔는지
-        show: new Cesium.CallbackProperty(() => {
-          return _entityVisible && _viewReady;
-        }, false),
       },
     });
     frustumEntities.push(sideEntity);
@@ -412,6 +366,8 @@ export function highlightRoadPointByName(viewer, photoName) {
   // 원본 포인트의 point 표시를 숨긴다 (좌표만 사용)
   if (target.point) {
     target.point.show = false;
+    target.show = true;
+    target.billboard = undefined;
   }
 
   // 포인트 위치 기준으로 CAMERA_HEIGHT 높이에 구(sphere)
@@ -436,30 +392,16 @@ export function highlightRoadPointByName(viewer, photoName) {
           sphereRadius,
           sphereRadius
         ),
-        material: Cesium.Color.YELLOW,
-        // sphere도 frustum과 동일하게 지연 + viewReady 조건에 맞춰 표시
-        show: new Cesium.CallbackProperty(() => {
-          return _entityVisible && _viewReady;
-        }, false),
+        material: Cesium.Color.CORAL,
       },
     });
   }
 
-  target.show = true;
-  target.billboard = undefined;
-
   _highlightPoint = target;
   _highlightViewer = viewer;
 
-  // 새 하이라이트 시작 시 상태 초기화
-  _frustumCreated = false;
-  _entityVisible = false;
-
-  // ENTITY_DELAY 지난 후 표시 플래그 켜고, 그 시점에 frustum 생성 시도
-  setTimeout(() => {
-    _entityVisible = true;
-    trySpawnFrustum();
-  }, FRUSTUMDEF.ENTITY_DELAY || 300);
+  // frustum 생성
+  spawnFrustumNow();
 
   return target;
 }
@@ -510,7 +452,5 @@ export function clearRoadHighlight() {
   }
 
   _highlightViewer = null;
-  _entityVisible = true;
-  _viewReady = false;
   _frustumCreated = false;
 }

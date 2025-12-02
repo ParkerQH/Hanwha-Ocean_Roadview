@@ -16,7 +16,6 @@ export const FRUSTUMDEF = {
   RATIO: 4.0 / 3.0,       // krpano 화면 비율 등. frustum 가로:세로 비율
   KRPANO_MAXFOV: 140,     // 사용할 krpano의 최대 fov
   FRUSTUM_MAXFOV: 120,     // 제공할 frustum의 최대 fov
-  ENTITY_DELAY: 300      // frustum 생성 딜레이 시간 (ms)
 }
 
 /** 
@@ -25,7 +24,8 @@ export const FRUSTUMDEF = {
 // 라인 및 베이스 WMS
 export const GEOSERVER_WMS = {
   URL: "/geoserver/Tongyeong/wms",
-  LAYER: "Tongyeong:survey_line_25_09",
+  LAYER_25_09: "Tongyeong:survey_line_25_09",
+  LAYER_25_03: "Tongyeong:survey_line_25_03",
   BASE_LAYER: "Tongyeong:ahnjung_v1",
 }
 

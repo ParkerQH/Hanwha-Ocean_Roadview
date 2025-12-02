@@ -3,7 +3,7 @@ import { loadRoad, clearRoad } from "./shared/cesium/roadLayer.js";
 import KrpanoPanel from "./features/roadview/krPanoPanel.jsx";
 import CesiumView from "./features/roadview/cesiumView.jsx";
 import MultipleItems from "./features/roadview/thumnailCarousel.jsx";
-import { KRPANO, CESIUMDEF } from "./config/constants";
+import { KRPANO, CESIUMDEF, GEOSERVER_WMS } from "./config/constants";
 import { roadPointsWithinMetersLocal, lonLatFromPosition } from "./shared/cesium/entityUtil.js";
 import { highlightRoadPointByName, clearRoadHighlight, setSceneView, setViewHeadingDeg, } from "./shared/cesium/roadViewHighlight";
 
@@ -18,18 +18,16 @@ export default function App() {
   const [shootingDate, setShootingDate] = useState(KRPANO.DEFDATE); // krpano 촬영 날짜 선택
   const dateRef = useRef(shootingDate);
 
-  // 사용 가능한 날짜 목록 (DEFDATE 먼저)
-  const ALL_DATE_CHOICES = [
-    KRPANO.DEFDATE,
-    ...KRPANO.DATE_CHOICES.filter((d) => d !== KRPANO.DEFDATE),
-  ];
-
   // 로드뷰 ON
   async function handleLoad() {
     if (!viewerRef.current || loading) return;
     setLoading(true);
     try {
-      await loadRoad(viewerRef.current);
+      if (shootingDate === "20250903") {
+        await loadRoad(viewerRef.current, GEOSERVER_WMS.LAYER_25_09 );
+      }
+      else
+        await loadRoad(viewerRef.current, GEOSERVER_WMS.LAYER_25_03 );
       setRoadOn(true); // 토글 ON
     } catch (e) {
       console.error(e);
@@ -59,7 +57,7 @@ export default function App() {
       await handleLoad();
     }
   }
-
+  
   // 가까운 미리보기 사진
   function updateNearPhotosFromHits(hits) {
     if (!hits || hits.length === 0) {
@@ -102,12 +100,10 @@ export default function App() {
 
   // 미리보기 클릭
   function handleThumbClick(ph_nm) {
+    clearRoadHighlight();
     setStartScene(ph_nm);   // ph_nm (PIC_...) 저장
     setActiveScene(ph_nm);  // 썸네일 하이라이트용
     setShowPano(true);
-    if (viewerRef.current) {
-      highlightRoadPointByName(viewerRef.current, ph_nm);
-    }
   }
 
   // krpano에서 scene 이동 시 포인트 이동 등
@@ -140,19 +136,38 @@ export default function App() {
   }
 
   // 날짜가 바뀌면 현재 미리보기 URL도 즉시 재계산 + krpano 초기화
-  useEffect(() => {
+    useEffect(() => {
+    // 1) 썸네일 URL만 새 날짜 기준으로 갱신
     setNearPhotos((prev) =>
       prev.map((it) => ({
         ...it,
         url: `${KRPANO.ROOT}/${shootingDate}/panos/${it.name}${KRPANO.TUMB}`,
       }))
     );
+
+    // 2) 날짜 ref 업데이트
     dateRef.current = shootingDate;
+
+    // 3) 로드뷰가 "이미 켜져 있을 때만" 레이어 교체
+    if (viewerRef.current && roadOn) {
+      clearRoadHighlight();
+      clearRoad(viewerRef.current);
+
+      // 바로 loadRoad만 호출해서, roadOn 토글 상태는 유지
+      if (shootingDate === "20250903") {
+        loadRoad(viewerRef.current, GEOSERVER_WMS.LAYER_25_09);
+      } else {
+        loadRoad(viewerRef.current, GEOSERVER_WMS.LAYER_25_03);
+      }
+    }
+
+    // 4) krpano 관련 상태 초기화
+    setNearPhotos([]);
     setShowPano(false);
     setStartScene(null);
     setActiveScene(null);
-    clearRoadHighlight();
-  }, [shootingDate]);
+  }, [shootingDate, roadOn]);
+
 
   // embedpano에 넘길 startscene id (scene_ 접두어 포함)
   const startSceneId =
@@ -181,14 +196,31 @@ export default function App() {
           backdropFilter: "blur(4px)",
         }}
       >
+        {/* 로드 뷰 토글(로드/제거 통합) */}
         <button type="button" onClick={toggleRoad} disabled={loading}>
           {roadOn ? "로드 뷰 제거" : loading ? "로딩 중…" : "로드 뷰 불러오기"}
         </button>
+
+        {/* 토글 ON일 때만 날짜 드롭다운 노출 */}
+        {roadOn && (
+          <select
+            value={shootingDate}
+            onChange={(e) => setShootingDate(e.target.value)}
+            style={{ height: 30 }}
+          >
+            {/* DEFDATE 우선 선택 보장 */}
+            {[KRPANO.DEFDATE, ...KRPANO.DATE_CHOICES.filter(d => d !== KRPANO.DEFDATE)].map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {showPano && startScene && activeScene && (
         <KrpanoPanel
-          viewerJsUrl={`${KRPANO.ROOT}/${shootingDate}/tour.js`}  // tour.js
+          viewerJsUrl={`${KRPANO.ROOT}/tour.js`}                  // tour.js
           src={`${KRPANO.ROOT}/${shootingDate}${KRPANO.TOUR}`}    // tour.xml
           startSceneId={startSceneId}                             // vars.startscene
           widthPx={600}
@@ -210,9 +242,8 @@ export default function App() {
         <MultipleItems
           images={nearPhotos}
           date={shootingDate}
-          dateChoices={ALL_DATE_CHOICES}
           activeName={activeScene}
-          onChangeDate={setShootingDate}
+          selectDate={shootingDate}
           onImageClick={handleThumbClick}
         />
       )}

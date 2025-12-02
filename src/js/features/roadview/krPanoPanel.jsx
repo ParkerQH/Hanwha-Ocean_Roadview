@@ -231,14 +231,12 @@ export default function KrpanoPanel({
 
         function onready(krpano) {
           krpanoRef.current = krpano;
-
+          
           const sceneListener = () => {
             if (!krpanoRef.current) return;
 
             const baseName = krpanoRef.current.get("scene[get(xml.scene)].title");
-
             const heading = krpanoRef.current.get("scene[get(xml.scene)].heading");
-
             if (typeof onSceneChange === "function") {
               onSceneChange({
                 sceneName: baseName,
@@ -261,10 +259,9 @@ export default function KrpanoPanel({
           sceneListenerRef.current = sceneListener;
           viewListenerRef.current = viewListener;
 
-          krpano.events.addListener("onnewpano", sceneListener);
+          krpano.events.addListener("onloadcomplete", sceneListener);
           krpano.events.addListener("onviewchanged", viewListener);
 
-          // 이미 scene 이 있으면 초기 상태 한 번 밀어줌
           sceneListener();
           viewListener();
         }
@@ -284,6 +281,7 @@ export default function KrpanoPanel({
 
     return () => {
       cancelled = true;
+
       const krpano = krpanoRef.current;
 
       if (krpano) {
@@ -311,7 +309,7 @@ export default function KrpanoPanel({
 
       if (typeof window.removepano === "function") {
         try {
-          window.removepano(panoId);
+          window.removepano(panoIdRef.current);
         } catch (err) {
           console.warn("[KrpanoPanel] removepano 실패:", err);
         }
